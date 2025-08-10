@@ -11,9 +11,11 @@ const cors = require("cors");
 const app = express();
 
 // Enable CORS for any origin
-app.use(cors({ origin: '*', methods: ['GET', 'POST', 'OPTIONS'], allowedHeaders: ['Content-Type', 'Authorization'] }));
-app.options('*', cors({ origin: '*', methods: ['GET', 'POST', 'OPTIONS'], allowedHeaders: ['Content-Type', 'Authorization'] }));
+app.use(cors({
+  origin: '*',
+}));
 
+// Body parsers
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -45,7 +47,7 @@ db.query(
   }
 );
 
-// Nodemailer (Gmail app password recommended)
+// Nodemailer
 const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
@@ -79,7 +81,7 @@ function authenticateToken(req, res, next) {
 
 // ---------- Routes ----------
 
-// Health / root
+// Health check
 app.get("/", (req, res) => {
   res.json({ status: "ok", api: "jixify backend" });
 });
@@ -95,7 +97,7 @@ app.post("/register", async (req, res) => {
     db.query(
       "INSERT INTO users_tbl (username, email, password) VALUES (?, ?, ?)",
       [username || null, email, hashed],
-      (err, result) => {
+      (err) => {
         if (err) {
           if (err.code === "ER_DUP_ENTRY") return res.status(400).json({ error: "User or email already exists" });
           console.error("DB insert error:", err);
@@ -188,7 +190,6 @@ app.post("/chat", authenticateToken, async (req, res) => {
     });
 
     const aiText = response?.choices?.[0]?.message?.content ?? "";
-
     return res.json({ reply: aiText });
   } catch (err) {
     console.error("OpenAI error:", err);
