@@ -6,16 +6,18 @@ const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const nodemailer = require("nodemailer");
 const OpenAI = require("openai");
-// const serverless = require("serverless-http");
+const cors = require("cors");
 
 const app = express();
+
+// Enable CORS for any origin
+app.use(cors({ origin: '*', methods: ['GET', 'POST', 'OPTIONS'], allowedHeaders: ['Content-Type', 'Authorization'] }));
+app.options('*', cors({ origin: '*', methods: ['GET', 'POST', 'OPTIONS'], allowedHeaders: ['Content-Type', 'Authorization'] }));
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-/**
- * Use a MySQL pool (better for serverless).
- * Make sure to set environment variables in Vercel dashboard.
- */
+// MySQL pool
 const db = mysql.createPool({
   host: process.env.DB_HOST,
   user: process.env.DB_USER,
@@ -27,7 +29,7 @@ const db = mysql.createPool({
   queueLimit: 0
 });
 
-// Ensure table exists (safe to call on each cold start)
+// Ensure table exists
 db.query(
   `CREATE TABLE IF NOT EXISTS users_tbl (
       id INT AUTO_INCREMENT PRIMARY KEY,
@@ -60,7 +62,7 @@ function signJwt(payload, expires = "1h") {
   return jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: expires });
 }
 
-// Middleware: allow token from Auth header or from cookie
+// Middleware: authenticate token
 function authenticateToken(req, res, next) {
   const authHeader = req.headers["authorization"];
   const tokenFromHeader = authHeader && authHeader.split(" ")[1];
@@ -82,7 +84,7 @@ app.get("/", (req, res) => {
   res.json({ status: "ok", api: "jixify backend" });
 });
 
-// Register - creates user and sends verification email
+// Register
 app.post("/register", async (req, res) => {
   try {
     const { username, email, password } = req.body;
@@ -95,13 +97,12 @@ app.post("/register", async (req, res) => {
       [username || null, email, hashed],
       (err, result) => {
         if (err) {
-          // Duplicate entry check
           if (err.code === "ER_DUP_ENTRY") return res.status(400).json({ error: "User or email already exists" });
           console.error("DB insert error:", err);
           return res.status(500).json({ error: "Database error" });
         }
 
-        const token = signJwt({ email }, "1d"); // verification token
+        const token = signJwt({ email }, "1d");
         const verifyLink = `${process.env.BASE_URL_PROD.replace(/\/$/, "")}/api/verify-email?token=${token}`;
 
         transporter.sendMail({
@@ -139,7 +140,7 @@ app.get("/verify-email", (req, res) => {
         return res.status(500).send("Database error");
       }
       if (result.affectedRows === 0) return res.status(404).send("Email not found");
-      // Return simple HTML success page
+
       res.send(`<html><body style="font-family:Arial;text-align:center;padding:40px;">
         <h1>✅ Email Verified</h1>
         <p>You can now login at your frontend.</p>
@@ -148,7 +149,7 @@ app.get("/verify-email", (req, res) => {
   });
 });
 
-// Login (email + password)
+// Login
 app.post("/login", (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ error: "Email and password required" });
@@ -166,21 +167,17 @@ app.post("/login", (req, res) => {
     const match = await bcrypt.compare(password, user.password);
     if (!match) return res.status(400).json({ error: "Invalid credentials" });
 
-    const token = signJwt({ id: user.id, email: user.email }, "1h"); // change expiry if you want
-    // return token in JSON (frontend stores it)
+    const token = signJwt({ id: user.id, email: user.email }, "1h");
     return res.json({ token });
   });
 });
 
-// Chat (protected) — call OpenAI and return reply
+// Chat (protected)
 app.post("/chat", authenticateToken, async (req, res) => {
   const { message } = req.body;
   if (!message) return res.status(400).json({ error: "Message is required" });
 
   try {
-    // Optionally fetch user info if needed
-    // const [rows] = await db.promise().query("SELECT username, email FROM users_tbl WHERE id = ?", [req.user.id]);
-
     const response = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
@@ -190,7 +187,6 @@ app.post("/chat", authenticateToken, async (req, res) => {
       max_tokens: 2000
     });
 
-    // safe access
     const aiText = response?.choices?.[0]?.message?.content ?? "";
 
     return res.json({ reply: aiText });
@@ -200,10 +196,6 @@ app.post("/chat", authenticateToken, async (req, res) => {
   }
 });
 
-// Export handler for Vercel
-// module.exports = serverless(app);
-
-// For local dev: run `node api/index.js`
 const port = process.env.PORT || 3000;
 app.listen(port, () => {
   console.log(`Server listening on port ${port}`);
