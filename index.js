@@ -102,7 +102,7 @@ app.post("/register", async (req, res) => {
         }
 
         const token = signJwt({ email }, "1d"); // verification token
-        const verifyLink = `${process.env.BASE_URL.replace(/\/$/, "")}/api/verify-email?token=${token}`;
+        const verifyLink = `${process.env.BASE_URL_PROD.replace(/\/$/, "")}/api/verify-email?token=${token}`;
 
         transporter.sendMail({
           from: process.env.EMAIL_USER,
