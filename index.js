@@ -6,7 +6,7 @@ const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const nodemailer = require("nodemailer");
 const OpenAI = require("openai");
-const serverless = require("serverless-http");
+// const serverless = require("serverless-http");
 
 const app = express();
 app.use(express.json());
@@ -201,10 +201,10 @@ app.post("/chat", authenticateToken, async (req, res) => {
 });
 
 // Export handler for Vercel
-module.exports = serverless(app);
+// module.exports = serverless(app);
 
 // For local dev: run `node api/index.js`
-if (require.main === module) {
-  const port = process.env.PORT || 3000;
-  app.listen(port, () => console.log(`Local server listening on ${port}`));
-}
+const port = process.env.PORT || 3000;
+app.listen(port, () => {
+  console.log(`Server listening on port ${port}`);
+});
